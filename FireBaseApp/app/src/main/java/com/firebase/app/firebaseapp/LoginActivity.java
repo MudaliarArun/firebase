@@ -3,16 +3,11 @@ package com.firebase.app.firebaseapp;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.annotation.TargetApi;
-import android.content.pm.PackageManager;
-import android.support.annotation.NonNull;
-import android.support.design.widget.Snackbar;
+import android.content.DialogInterface;
+import android.content.SharedPreferences;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.app.LoaderManager.LoaderCallbacks;
 
-import android.content.CursorLoader;
-import android.content.Loader;
-import android.database.Cursor;
-import android.net.Uri;
 import android.os.AsyncTask;
 
 import android.os.Build;
@@ -27,30 +22,37 @@ import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.firebase.client.AuthData;
+import com.firebase.client.DataSnapshot;
+import com.firebase.client.Firebase;
+import com.firebase.client.FirebaseError;
+import com.firebase.client.ValueEventListener;
 
-import static android.Manifest.permission.READ_CONTACTS;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * A login screen that offers login via email/password.
  */
-public class LoginActivity extends AppCompatActivity implements LoaderCallbacks<Cursor> {
+public class LoginActivity extends AppCompatActivity  {
 
     /**
      * Id to identity READ_CONTACTS permission request.
      */
     private static final int REQUEST_READ_CONTACTS = 0;
+    private static final String USER_TOKEN = "userToken";
+    private static final String PROVIDER = "firebaseProvider";
 
     /**
      * A dummy authentication store containing known user names and passwords.
      * TODO: remove after connecting to a real authentication system.
      */
-    private static final String[] DUMMY_CREDENTIALS = new String[]{
-            "foo@example.com:hello", "bar@example.com:world"
-    };
+
     /**
      * Keep track of the login task to ensure we can cancel it if requested.
      */
@@ -61,14 +63,30 @@ public class LoginActivity extends AppCompatActivity implements LoaderCallbacks<
     private EditText mPasswordView;
     private View mProgressView;
     private View mLoginFormView;
-
+    //all you can get help in detail is here
+    Firebase myFirebaseRef;
+    private SharedPreferences mSharedPreferences;
+    private String USER_ID ="uid";
+    private LinearLayout linearLayoutSignin;
+    private LinearLayout linearLayoutData;
+    private TextView mTextViewRead;
+    private Button mButtonRead;
+    private Button mButtonWrite;
+    private EditText mEditTextWrite;
+    String readDataTemp ="";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
+        //Firebase declare
+        Firebase.setAndroidContext(this);
+        //myFirebaseRef = new Firebase("https://<YOUR-FIREBASE-APP>.firebaseio.com/");
+        myFirebaseRef = new Firebase("https://demoonlivedata.firebaseio.com/");//.firebaseIO.com
+        //Firebase ends
+
+
         // Set up the login form.
         mEmailView = (AutoCompleteTextView) findViewById(R.id.email);
-        populateAutoComplete();
 
         mPasswordView = (EditText) findViewById(R.id.password);
         mPasswordView.setOnEditorActionListener(new TextView.OnEditorActionListener() {
@@ -92,51 +110,93 @@ public class LoginActivity extends AppCompatActivity implements LoaderCallbacks<
 
         mLoginFormView = findViewById(R.id.login_form);
         mProgressView = findViewById(R.id.login_progress);
-    }
 
-    private void populateAutoComplete() {
-        if (!mayRequestContacts()) {
-            return;
-        }
 
-        getLoaderManager().initLoader(0, null, this);
-    }
+        // UI for firebase
+        linearLayoutSignin = (LinearLayout)findViewById(R.id.email_login_form);
 
-    private boolean mayRequestContacts() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return true;
-        }
-        if (checkSelfPermission(READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
-            return true;
-        }
-        if (shouldShowRequestPermissionRationale(READ_CONTACTS)) {
-            Snackbar.make(mEmailView, R.string.permission_rationale, Snackbar.LENGTH_INDEFINITE)
-                    .setAction(android.R.string.ok, new View.OnClickListener() {
-                        @Override
-                        @TargetApi(Build.VERSION_CODES.M)
-                        public void onClick(View v) {
-                            requestPermissions(new String[]{READ_CONTACTS}, REQUEST_READ_CONTACTS);
+        linearLayoutData = (LinearLayout)findViewById(R.id.ll_userdata);
+
+        mTextViewRead = (TextView)findViewById(R.id.tv_data);
+        mButtonRead = (Button)findViewById(R.id.btn_read_data);
+        mButtonRead.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                readData("batters", new ValueEventListener() {
+                    @Override
+                    public void onDataChange(DataSnapshot dataSnapshot) {
+                        //i have used the hashmap, but you can iterrate over dataSnapshot
+                        // iterating method is dataSnapshot.getChildren()
+                        // i.e like a for loop but its iteration not a for loop
+
+                        HashMap<String,?> map = (HashMap<String, ?>) dataSnapshot.getValue();
+                        // i am casting without checks as i know the Json structure
+
+                        ArrayList<HashMap<String,?>> batters = (ArrayList<HashMap<String, ?>>) map.get("batter");
+                        readDataTemp = "";
+                        for (int i = 0; i<batters.size();i++){
+                            HashMap<String,?> batter = batters.get(i);
+                            readDataTemp += (String) batter.get("id");
+                            readDataTemp += "   "+batter.get("type");
+                            readDataTemp +="\n";
                         }
-                    });
-        } else {
-            requestPermissions(new String[]{READ_CONTACTS}, REQUEST_READ_CONTACTS);
-        }
-        return false;
-    }
 
-    /**
-     * Callback received when a permissions request has been completed.
-     */
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        if (requestCode == REQUEST_READ_CONTACTS) {
-            if (grantResults.length == 1 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                populateAutoComplete();
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                mTextViewRead.setText(readDataTemp);
+                            }
+                        });
+                        System.out.println(dataSnapshot);
+                    }
+
+                    @Override
+                    public void onCancelled(FirebaseError firebaseError) {
+                        System.out.println(firebaseError);
+                    }
+                });
             }
-        }
-    }
+        });
 
+        mButtonWrite = (Button)findViewById(R.id.btn_write_data);
+        mEditTextWrite = (EditText)findViewById(R.id.edt_data);
+        mButtonWrite.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+               final String dataToWrite = mEditTextWrite.getText().toString();
+
+
+                Map<String, String> dataBatter = new HashMap<>();
+                dataBatter.put("id", "1001");
+                dataBatter.put("type", dataToWrite);
+
+                ArrayList<Map<String, String>> hashMaps = new ArrayList<>();
+                hashMaps.add(dataBatter);
+
+              /*  Map<String, Map<String, String>> batters = new HashMap<String, Map<String, String>>();
+                batters.put("batter", dataBatter);*/
+
+                Firebase refBatter  = myFirebaseRef.child("batters").child("batter");
+                refBatter.setValue(hashMaps, new Firebase.CompletionListener() {
+                    @Override
+                    public void onComplete(FirebaseError firebaseError, Firebase firebase) {
+                        showAlert("Updated");
+                    }
+                });
+/*
+                writeData("batters/batter/0", "Arun icecream " + dataToWrite, new Firebase.CompletionListener() {
+                    @Override
+                    public void onComplete(FirebaseError firebaseError, Firebase firebase) {
+                        showAlert("Updated");
+                    }
+                });*/
+            }
+        });
+
+
+
+        
+    }
 
     /**
      * Attempts to sign in or register the account specified by the login form.
@@ -236,39 +296,7 @@ public class LoginActivity extends AppCompatActivity implements LoaderCallbacks<
         }
     }
 
-    @Override
-    public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
-        return new CursorLoader(this,
-                // Retrieve data rows for the device user's 'profile' contact.
-                Uri.withAppendedPath(ContactsContract.Profile.CONTENT_URI,
-                        ContactsContract.Contacts.Data.CONTENT_DIRECTORY), ProfileQuery.PROJECTION,
 
-                // Select only email addresses.
-                ContactsContract.Contacts.Data.MIMETYPE +
-                        " = ?", new String[]{ContactsContract.CommonDataKinds.Email
-                .CONTENT_ITEM_TYPE},
-
-                // Show primary email addresses first. Note that there won't be
-                // a primary email address if the user hasn't specified one.
-                ContactsContract.Contacts.Data.IS_PRIMARY + " DESC");
-    }
-
-    @Override
-    public void onLoadFinished(Loader<Cursor> cursorLoader, Cursor cursor) {
-        List<String> emails = new ArrayList<>();
-        cursor.moveToFirst();
-        while (!cursor.isAfterLast()) {
-            emails.add(cursor.getString(ProfileQuery.ADDRESS));
-            cursor.moveToNext();
-        }
-
-        addEmailsToAutoComplete(emails);
-    }
-
-    @Override
-    public void onLoaderReset(Loader<Cursor> cursorLoader) {
-
-    }
 
     private void addEmailsToAutoComplete(List<String> emailAddressCollection) {
         //Create adapter to tell the AutoCompleteTextView what to show in its dropdown list.
@@ -308,36 +336,51 @@ public class LoginActivity extends AppCompatActivity implements LoaderCallbacks<
         protected Boolean doInBackground(Void... params) {
             // TODO: attempt authentication against a network service.
 
-            try {
-                // Simulate network access.
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                return false;
-            }
+           createFireBaseUser(mEmail, mPassword, new Firebase.ValueResultHandler<Map<String, Object>>() {
+               @Override
+               public void onSuccess(Map<String, Object> result) {
+                   saveStringToPref(USER_ID, (String) result.get("uid"));
+                   showAuthenticatedAlert("User Created Successfully");
+                   mAuthTask = null;
+                   showProgress(false);
+                   //finish();
+               }
 
-            for (String credential : DUMMY_CREDENTIALS) {
-                String[] pieces = credential.split(":");
-                if (pieces[0].equals(mEmail)) {
-                    // Account exists, return true if the password matches.
-                    return pieces[1].equals(mPassword);
-                }
-            }
+               @Override
+               public void onError(FirebaseError firebaseError) {
 
-            // TODO: register the new account here.
-            return true;
+                    // Just assumed, did not get time to create a new ui, so have assumed error may occur
+                   // so attempting to login in case the user id already exist
+                   AuthenticateFireBaseUser(mEmail, mPassword, new Firebase.AuthResultHandler() {
+                       @Override
+                       public void onAuthenticated(AuthData authData) {
+                           mAuthTask = null;
+                           showProgress(false);
+                           saveStringToPref(USER_TOKEN,authData.getToken());
+                           saveStringToPref(PROVIDER,authData.getProvider());
+                           saveStringToPref(USER_ID, authData.getUid());
+                           showAuthenticatedAlert("User Authenticated");
+
+                       }
+
+                       @Override
+                       public void onAuthenticationError(FirebaseError firebaseError) {
+                           mAuthTask = null;
+                           showProgress(false);
+                           mPasswordView.setError(firebaseError.getMessage());//getString(R.string.error_incorrect_password)
+                           mPasswordView.requestFocus();
+                       }
+                   });
+
+               }
+           });
+
+            return false;
         }
 
         @Override
         protected void onPostExecute(final Boolean success) {
-            mAuthTask = null;
-            showProgress(false);
 
-            if (success) {
-                finish();
-            } else {
-                mPasswordView.setError(getString(R.string.error_incorrect_password));
-                mPasswordView.requestFocus();
-            }
         }
 
         @Override
@@ -345,6 +388,123 @@ public class LoginActivity extends AppCompatActivity implements LoaderCallbacks<
             mAuthTask = null;
             showProgress(false);
         }
+    }
+
+    /**
+     * writes data to firebase server for the given key & store the given value
+     * @param key
+     * @param value
+     */
+    public void writeData(String key,String value, Firebase.CompletionListener completionListener){
+        myFirebaseRef.child(key).setValue(value, completionListener);
+    }
+
+    /**
+     *
+     * @param key
+     * @param valueEventListener
+     */
+    public void readData(String key,ValueEventListener valueEventListener){
+        myFirebaseRef.child(key).addValueEventListener(valueEventListener);
+    }
+    public void readUserName(){
+        readData("message",
+                new ValueEventListener() {
+                    @Override
+                    public void onDataChange(DataSnapshot snapshot) {
+                        System.out.println(snapshot.getValue());  //prints "Do you have data? You'll love Firebase."
+                    }
+
+                    @Override
+                    public void onCancelled(FirebaseError error) {
+                    }
+
+                });
+    }
+
+    public void createFireBaseUser(String userName, String password, Firebase.ValueResultHandler valueResultHandler){
+        myFirebaseRef.createUser(userName, password, valueResultHandler);
+    }
+
+    public void AuthenticateFireBaseUser(String userName, String password, Firebase.AuthResultHandler authResultHandler){
+        myFirebaseRef.authWithPassword(userName, password, authResultHandler);
+    }
+
+    /**
+     * Init SharedPreferences
+     */
+    private void initPref(){
+        if(mSharedPreferences  == null)
+            mSharedPreferences  = getSharedPreferences(getPackageName(),MODE_PRIVATE);
+    }
+    public void saveStringToPref(String key,String value){
+        initPref();
+        SharedPreferences.Editor mEditor = mSharedPreferences.edit();
+        mEditor.putString(key,value);
+        mEditor.commit();
+    }
+
+    /**
+     * get data based on key form preference
+     * @param key
+     * @return Object cast as per your need
+     */
+    public Object getPref(String key){
+        initPref();
+        return mSharedPreferences.getAll().get(key);
+    }
+
+    public void showAuthenticatedAlert(String message){
+        AlertDialog.Builder alertDialog = new AlertDialog.Builder(this);
+        alertDialog.setMessage(message);
+        alertDialog.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+                showDataScreen();
+            }
+        });
+        alertDialog.create().show();
+    }
+
+    public void showAlert(String message){
+        AlertDialog.Builder alertDialog = new AlertDialog.Builder(this);
+        alertDialog.setMessage(message);
+        alertDialog.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+            }
+        });
+        alertDialog.create().show();
+    }
+
+    /**
+     * shows login screen just visibility changed
+     */
+    public void showLoginScreen(){
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                linearLayoutSignin.setVisibility(View.VISIBLE);
+                linearLayoutData.setVisibility(View.GONE);
+            }
+        });
+
+    }
+
+    /**
+     * shows data screen just visibility changed
+     */
+    public void showDataScreen(){
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                linearLayoutSignin.setVisibility(View.GONE);
+                linearLayoutData.setVisibility(View.VISIBLE);
+            }
+        });
+
     }
 }
 
