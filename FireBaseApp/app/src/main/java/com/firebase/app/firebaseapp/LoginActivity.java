@@ -176,7 +176,7 @@ public class LoginActivity extends AppCompatActivity  {
                 dataBatter.put("type", dataToWrite);
 
                 Map<String, Object> dataBatterWrap = new HashMap<>();
-                dataBatterWrap.put("6",dataBatter); // here 6 must be maintained incremental we can take time stamp may be
+                dataBatterWrap.put("6",dataBatter); // here 6 must be maintained incremental
 
 
                 Firebase refBatter  = myFirebaseRef.child("batters").child("batter").getRef();
