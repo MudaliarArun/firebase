@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A login screen that offers login via email/password.
@@ -137,9 +138,11 @@ public class LoginActivity extends AppCompatActivity  {
                             readDataTemp = "";
                             for (int i = 0; i < batters.size(); i++) {
                                 HashMap<String, ?> batter = batters.get(i);
-                                readDataTemp += (String) batter.get("id");
-                                readDataTemp += "   " + batter.get("type");
-                                readDataTemp += "\n";
+                                if(batter != null) {
+                                    readDataTemp += (String) batter.get("id");
+                                    readDataTemp += "   " + batter.get("type");
+                                    readDataTemp += "\n";
+                                }
                             }
 
                             runOnUiThread(new Runnable() {
@@ -167,24 +170,50 @@ public class LoginActivity extends AppCompatActivity  {
             public void onClick(View v) {
                final String dataToWrite = mEditTextWrite.getText().toString();
 
-
-                /*Map<String, String> dataBatter = new HashMap<>();
+                // adding data
+                Map<String, Object> dataBatter = new HashMap<>();
                 dataBatter.put("id", "1005");
-                dataBatter.put("type", dataToWrite);*/
+                dataBatter.put("type", dataToWrite);
 
-               /* ArrayList<Map<String, String>> hashMaps = new ArrayList<>();
-                hashMaps.add(dataBatter);*/
+                Map<String, Object> dataBatterWrap = new HashMap<>();
+                dataBatterWrap.put("6",dataBatter); // here 6 must be maintained incremental we can take time stamp may be
 
-              /*  Map<String, Map<String, String>> batters = new HashMap<String, Map<String, String>>();
-                batters.put("batter", dataBatter);*/
 
                 Firebase refBatter  = myFirebaseRef.child("batters").child("batter").getRef();
+                refBatter.updateChildren(dataBatterWrap, new Firebase.CompletionListener() {
+                    @Override
+                    public void onComplete(FirebaseError firebaseError, Firebase firebase) {
+                        if(firebaseError!= null){
+                            showAlert("Error Updating" + firebaseError);
+                        }else{
+                            showAlert("Updated " + firebase);
+                        }
+
+                    }
+                });
+
+
+
+                //Updating data
+                //update a key already present named "name"
+                /*Firebase refBatter  = myFirebaseRef.child("name");
+                refBatter.setValue(dataToWrite, new Firebase.CompletionListener() {
+                    @Override
+                    public void onComplete(FirebaseError firebaseError, Firebase firebase) {
+                        showAlert("Updated " + firebaseError + " " + firebase);
+                    }
+                });*/
+
+
+                //dont fall into this its for RnD yet ERRoRRRRRRRRRRRRR
+                // adding batter working
+                /*Firebase refBatter  = myFirebaseRef.child("batters").child("batter").getRef();
                 refBatter.push().setValue(new batter("1005",dataToWrite), new Firebase.CompletionListener() {
                     @Override
                     public void onComplete(FirebaseError firebaseError, Firebase firebase) {
                         showAlert("Updated " + firebaseError + " " + firebase);
                     }
-                });
+                });*/
 
             }
         });
