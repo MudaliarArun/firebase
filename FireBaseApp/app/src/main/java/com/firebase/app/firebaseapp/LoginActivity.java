@@ -132,21 +132,23 @@ public class LoginActivity extends AppCompatActivity  {
                         HashMap<String,?> map = (HashMap<String, ?>) dataSnapshot.getValue();
                         // i am casting without checks as i know the Json structure
 
-                        ArrayList<HashMap<String,?>> batters = (ArrayList<HashMap<String, ?>>) map.get("batter");
-                        readDataTemp = "";
-                        for (int i = 0; i<batters.size();i++){
-                            HashMap<String,?> batter = batters.get(i);
-                            readDataTemp += (String) batter.get("id");
-                            readDataTemp += "   "+batter.get("type");
-                            readDataTemp +="\n";
-                        }
-
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                mTextViewRead.setText(readDataTemp);
+                        if(map.get("batter") instanceof ArrayList) {
+                            ArrayList<HashMap<String, ?>> batters = (ArrayList<HashMap<String, ?>>) map.get("batter");
+                            readDataTemp = "";
+                            for (int i = 0; i < batters.size(); i++) {
+                                HashMap<String, ?> batter = batters.get(i);
+                                readDataTemp += (String) batter.get("id");
+                                readDataTemp += "   " + batter.get("type");
+                                readDataTemp += "\n";
                             }
-                        });
+
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    mTextViewRead.setText(readDataTemp);
+                                }
+                            });
+                        }
                         System.out.println(dataSnapshot);
                     }
 
@@ -166,30 +168,24 @@ public class LoginActivity extends AppCompatActivity  {
                final String dataToWrite = mEditTextWrite.getText().toString();
 
 
-                Map<String, String> dataBatter = new HashMap<>();
-                dataBatter.put("id", "1001");
-                dataBatter.put("type", dataToWrite);
+                /*Map<String, String> dataBatter = new HashMap<>();
+                dataBatter.put("id", "1005");
+                dataBatter.put("type", dataToWrite);*/
 
-                ArrayList<Map<String, String>> hashMaps = new ArrayList<>();
-                hashMaps.add(dataBatter);
+               /* ArrayList<Map<String, String>> hashMaps = new ArrayList<>();
+                hashMaps.add(dataBatter);*/
 
               /*  Map<String, Map<String, String>> batters = new HashMap<String, Map<String, String>>();
                 batters.put("batter", dataBatter);*/
 
-                Firebase refBatter  = myFirebaseRef.child("batters").child("batter");
-                refBatter.setValue(hashMaps, new Firebase.CompletionListener() {
+                Firebase refBatter  = myFirebaseRef.child("batters").child("batter").getRef();
+                refBatter.push().setValue(new batter("1005",dataToWrite), new Firebase.CompletionListener() {
                     @Override
                     public void onComplete(FirebaseError firebaseError, Firebase firebase) {
-                        showAlert("Updated");
+                        showAlert("Updated " + firebaseError + " " + firebase);
                     }
                 });
-/*
-                writeData("batters/batter/0", "Arun icecream " + dataToWrite, new Firebase.CompletionListener() {
-                    @Override
-                    public void onComplete(FirebaseError firebaseError, Firebase firebase) {
-                        showAlert("Updated");
-                    }
-                });*/
+
             }
         });
 
