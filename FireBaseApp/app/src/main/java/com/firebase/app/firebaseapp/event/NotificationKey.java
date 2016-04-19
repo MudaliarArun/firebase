@@ -19,4 +19,6 @@ public class NotificationKey {
     public static String refresh = "refresh";
     public static String recievedAnswers = "recievedAnswers";
     public static String categoryComplete = "categoryComplete";
+    public static String popToRoot = "popToRoot";
+    public static String invalidLogin = "invalidLogin";
 }

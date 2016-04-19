@@ -117,6 +117,105 @@ public class DataManager {
         }
         return false;
     }
+
+
+    /*func facebookLogin() {
+
+
+        let facebookLogin = FBSDKLoginManager()
+
+
+        facebookLogin.logInWithReadPermissions(["public_profile","email"], fromViewController: UIApplication.sharedApplication().keyWindow!.rootViewController, handler: {
+            (facebookResult, facebookError) -> Void in
+
+            if facebookError != nil {
+
+                //print("Facebook login failed. Error \(facebookError)")
+
+            } else if facebookResult.isCancelled {
+
+                //print("Facebook login was cancelled.")
+
+
+            } else {
+
+                if self.loginDelegate != nil {
+                    self.loginDelegate!.didStartLoginProcess()
+                }
+
+                let accessToken = FBSDKAccessToken.currentAccessToken().tokenString
+                self.firebaseReference.authWithOAuthProvider("facebook", token: accessToken,
+                        withCompletionBlock: { error, authData in
+                    if error != nil {
+                        //print("Login failed. \(error)")
+                    } else {
+
+                        self.checkIfUserAlreadyExists()
+
+
+                    }
+                })
+            }
+        })
+
+    }
+
+    func twitterLogin() {
+
+
+        let twitterAuthHelper = TwitterAuthHelper(firebaseRef: firebaseReference, apiKey:"nN0UBlVyTYqxK3YAOqXVS6Yph")
+        twitterAuthHelper.selectTwitterAccountWithCallback { error, accounts in
+            if error != nil {
+                // Error retrieving Twitter accounts
+
+                //print(error)
+
+                NSNotificationCenter.defaultCenter().postNotificationName(NotificationKey.invalidTwitterLogin, object: error, userInfo: nil);
+
+            } else if accounts.count > 1 {
+                // Select an account. Here we pick the first one for simplicity
+                let account = accounts[0] as? ACAccount
+
+                if self.loginDelegate != nil {
+                    self.loginDelegate!.didStartLoginProcess()
+                }
+
+                twitterAuthHelper.authenticateAccount(account, withCallback: { error, authData in
+                    if error != nil {
+                        // Error authenticating account
+
+                        //print(error)
+                        NSNotificationCenter.defaultCenter().postNotificationName(NotificationKey.invalidTwitterLogin, object: error, userInfo: nil);
+                    } else {
+                        // User logged in!
+
+
+                        self.checkIfUserAlreadyExists()
+
+                    }
+                })
+            }
+        }
+
+    }*/
+    public void loginAsGuest() {
+
+        if(didStartLoginProcess != null) {
+            didStartLoginProcess.didStartLoginProcess();
+        }
+        firebaseReference.authAnonymously(new Firebase.AuthResultHandler() {
+            @Override
+            public void onAuthenticated(AuthData authData) {
+                checkIfUserAlreadyExists();
+            }
+
+            @Override
+            public void onAuthenticationError(FirebaseError firebaseError) {
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.invalidLogin,firebaseError,null));
+            }
+        });
+    }
+
     public void  logout() {
         firebaseReference.unauth();
     }
@@ -294,6 +393,21 @@ public class DataManager {
 
     }
 
+    public void loadDataForLinking() {
+        firebaseReference.child("users/"+firebaseReference.getAuth().getUid()).addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                dataToLink = (LinkedHashMap<String, ?>) dataSnapshot.getValue();
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.popToRoot,null));
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+
+    }
     public void checkIfRegisteredDetails()  {
 
         currentUserReference.addListenerForSingleValueEvent(new ValueEventListener() {
