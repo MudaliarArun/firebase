@@ -37,6 +37,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import io.paperdb.Paper;
+
 /**
  * A login screen that offers login via email/password.
  */
@@ -81,8 +83,10 @@ public class LoginActivity extends AppCompatActivity  {
         setContentView(R.layout.activity_login);
         //Firebase declare
         Firebase.setAndroidContext(this);
+        Paper.init(this);
         //myFirebaseRef = new Firebase("https://<YOUR-FIREBASE-APP>.firebaseio.com/");
         myFirebaseRef = new Firebase("https://demoonlivedata.firebaseio.com/");//.firebaseIO.com
+        myFirebaseRef = new Firebase("https://dentaliq.firebaseio.com");//.firebaseIO.com
         //Firebase ends
 
 

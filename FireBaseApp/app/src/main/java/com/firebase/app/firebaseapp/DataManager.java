@@ -1,19 +1,28 @@
 package com.firebase.app.firebaseapp;
 
+import android.content.Context;
+import android.util.Base64;
+
 import com.firebase.app.firebaseapp.event.NotificationContent;
 import com.firebase.app.firebaseapp.event.NotificationKey;
+import com.firebase.app.firebaseapp.util.PaperTags;
 import com.firebase.client.AuthData;
 import com.firebase.client.DataSnapshot;
 import com.firebase.client.Firebase;
 import com.firebase.client.FirebaseError;
 import com.firebase.client.ValueEventListener;
+import com.flurry.android.FlurryAgent;
 
 import org.greenrobot.eventbus.EventBus;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import io.paperdb.Paper;
 
 /**
  * Created by Droid on 18/04/2016.
@@ -22,8 +31,10 @@ import java.util.Map;
  */
 public class DataManager {
     private static DataManager dataManager;
+    private final Context context;
     Firebase firebaseReference = new Firebase("https://dentaliq.firebaseio.com");
     Firebase currentUserReference = new Firebase("");
+    JSONManager jsonManager;
     //var jsonManager = JsonManager.sharedInstance;
     String newMessage = "";
     private LoginDelegate didStartLoginProcess;
@@ -46,12 +57,18 @@ public class DataManager {
 
 
     String subscriptionString  = "No Subscription";
+
+    private DataManager(Context context) {
+        this.context= context;
+    }
     //SimpleDate dateFormatter = NSDateFormatter();
 
-    public static DataManager getInstance(){
+    public static DataManager getInstance(Context context){
         if(dataManager == null) {
-            dataManager = new DataManager();
+            dataManager = new DataManager(context);
+            dataManager.jsonManager =  JSONManager.getInstance(context);
         }
+
         return dataManager;
     }
 
@@ -90,6 +107,50 @@ public class DataManager {
             return false;
         }
         return false;
+    }
+    public void  logout() {
+        firebaseReference.unauth();
+    }
+
+    //MARK: Account Details
+
+    public void sendPasswordReset(String email) {
+
+        // convert the email string to lower case
+        String emailToLowerCase = email.toLowerCase();
+        // remove any whitespaces before and after the email address
+        String emailClean = emailToLowerCase.replaceAll(" ", "").trim();
+        firebaseReference.resetPassword(emailClean, new Firebase.ResultHandler() {
+            @Override
+            public void onSuccess() {
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.passResetSuccess, null, null));
+            }
+
+            @Override
+            public void onError(FirebaseError firebaseError) {
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.passResetFailure, null, null));
+            }
+        });
+    }
+    public void updateRegistrationDetails() {
+
+        currentUserReference.child("based").setValue(registrationDictionary.get("based"));
+        currentUserReference.child("occupation").setValue(registrationDictionary.get("occupation"));
+        currentUserReference.child("university").setValue(registrationDictionary.get("university"));
+        currentUserReference.child("gradYear").setValue(registrationDictionary.get("gradYear"));
+        currentUserReference.child("interests").setValue(registrationDictionary.get("interests"));
+
+        FlurryAgent.setUserId(currentUserReference.getAuth().getUid());
+        LinkedHashMap<String,String> newUserSignUp = new LinkedHashMap<>();
+        newUserSignUp.put("provider",currentUserReference.getAuth().getProvider());
+        newUserSignUp.put("based",registrationDictionary.get("based").toString());
+        newUserSignUp.put("occupation",registrationDictionary.get("occupation").toString());
+        newUserSignUp.put("university",registrationDictionary.get("university").toString());
+        newUserSignUp.put("gradYear",registrationDictionary.get("gradYear").toString());
+        newUserSignUp.put("interests",registrationDictionary.get("interests").toString());
+
+        FlurryAgent.logEvent("UserSignUp", newUserSignUp);
+
     }
 
     public String getLoginDetails(){
@@ -248,15 +309,120 @@ public class DataManager {
             }
         });
     }
-
-    /*public void  loadData() {
-        checkLockStatus()
-        loadFavourites()
-        loadAnswered()
-        loadRated()
-        loadHighScore()
-        loadInitialArray()
+    public void  loadData() {
+        //checkLockStatus();
+        //loadFavourites();
+        //loadAnswered();
+        //loadRated();
+        //loadHighScore();
+        //loadInitialArray();
     }
+
+    public byte[] decodeImageWithBase64String(String base64String){
+        if(base64String == null)
+            return null;
+        return Base64.decode(base64String, Base64.DEFAULT);
+    }
+
+    public void showRating() {
+
+
+        if (allAnswers.size() >= 100) {
+            currentUserReference.child("appRatingActionTaken").addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(DataSnapshot dataSnapshot) {
+                    System.out.println(dataSnapshot.toString());
+                    if(dataSnapshot.exists() && dataSnapshot.getValue().toString().equalsIgnoreCase("true")){
+                        EventBus.getDefault().post(new NotificationContent(NotificationKey.showRatingAction,false,null));
+                    }else{
+                        EventBus.getDefault().post(new NotificationContent(NotificationKey.showRatingAction,true,null));
+                    }
+                }
+
+                @Override
+                public void onCancelled(FirebaseError firebaseError) {
+                    //EventBus.getDefault().post(new NotificationContent(NotificationKey.showRatingAction,firebaseError,null));
+                }
+            });
+
+        } else {
+            //print("More questions need to be answered to show Rate App Banner")
+        }
+
+
+
+    }
+
+    public void updateRatingAction() {
+
+        currentUserReference.child("appRatingActionTaken").setValue("true");
+
+    }
+
+    public void checkQuestionVersion(final boolean showAlert, final boolean autoDownload) {
+        firebaseReference.child("questionBank/version").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if (!dataSnapshot.getValue().toString().equalsIgnoreCase(jsonManager.currentVersionNumber)) {
+                    if (autoDownload) {
+                        downloadUpdate();
+                    } else {
+                        EventBus.getDefault().post(new NotificationContent(NotificationKey.newUpdateAvailable, showAlert, null));
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+                //EventBus.getDefault().post(new NotificationContent(NotificationKey.newUpdateAvailable,firebaseError,showAlert,null));
+            }
+        });
+    }
+
+    public void downloadUpdate() {
+
+        firebaseReference.child("questionBank/newMessage").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(dataSnapshot != null){
+                    newMessage = dataSnapshot.getValue().toString();
+                }
+                firebaseReference.child("questionBank").addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(DataSnapshot dataSnapshot) {
+
+                        try {
+                            JSONObject json  = new JSONObject((String) dataSnapshot.getValue());
+                            String theJSONText = json.toString();
+                            Paper.book(PaperTags.BOOK).write(PaperTags.JSON_DATA,theJSONText);//save data to storage
+
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                            EventBus.getDefault().post(new NotificationContent(NotificationKey.questionBankError, null, null));
+                        }
+                        EventBus.getDefault().post(new NotificationContent(NotificationKey.updatedQuestionBank,null, null));
+                    }
+
+                    @Override
+                    public void onCancelled(FirebaseError firebaseError) {
+                        EventBus.getDefault().post(new NotificationContent(NotificationKey.questionBankError,firebaseError, null));
+                    }
+                });
+
+
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.questionBankError,firebaseError, null));
+            }
+        });
+
+
+    }
+
+
+    /*
     public void downloadingNewVersion() {
 
     }
