@@ -78,7 +78,7 @@ public class JSONManager {
         }
 
         if(!dataFromExternalStorage) {
-            JSONResourceReader reader= new JSONResourceReader(context.getResources(), R.raw.newData);
+            JSONResourceReader reader= new JSONResourceReader(context.getResources(), R.raw.newdata);
             LinkedHashMap<String,LinkedHashMap<String,LinkedHashMap<String,String>>> mJsonMap = new LinkedHashMap<>();
             mJsonMap = reader.constructUsingGson(mJsonMap.getClass());
 

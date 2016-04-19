@@ -1,6 +1,7 @@
 package com.firebase.app.firebaseapp;
 
 import android.content.Context;
+import android.text.format.DateFormat;
 import android.util.Base64;
 
 import com.firebase.app.firebaseapp.event.NotificationContent;
@@ -17,10 +18,16 @@ import org.greenrobot.eventbus.EventBus;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import io.paperdb.Paper;
 
@@ -35,10 +42,12 @@ public class DataManager {
     Firebase firebaseReference = new Firebase("https://dentaliq.firebaseio.com");
     Firebase currentUserReference = new Firebase("");
     JSONManager jsonManager;
+    private String DATE_FORMAT_COMMON = "dd/MM/yyyy";
+    SimpleDateFormat dateFormatter = new SimpleDateFormat(DATE_FORMAT_COMMON);
     //var jsonManager = JsonManager.sharedInstance;
     String newMessage = "";
     private LoginDelegate didStartLoginProcess;
-    LinkedHashMap allFavourites = new LinkedHashMap();
+    ArrayList<?> allFavourites = new ArrayList();
     ArrayList<?> allAnswers  = new ArrayList<>();
     ArrayList<?> allDontKnow  = new ArrayList<>();
     ArrayList<?> allSomeWhat  = new ArrayList<>();
@@ -310,12 +319,12 @@ public class DataManager {
         });
     }
     public void  loadData() {
-        //checkLockStatus();
-        //loadFavourites();
-        //loadAnswered();
-        //loadRated();
-        //loadHighScore();
-        //loadInitialArray();
+        checkLockStatus();
+        loadFavourites();
+        loadAnswered();
+        loadRated();
+        loadHighScore();
+        loadInitialArray();
     }
 
     public byte[] decodeImageWithBase64String(String base64String){
@@ -384,7 +393,7 @@ public class DataManager {
         firebaseReference.child("questionBank/newMessage").addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                if(dataSnapshot != null){
+                if (dataSnapshot != null) {
                     newMessage = dataSnapshot.getValue().toString();
                 }
                 firebaseReference.child("questionBank").addListenerForSingleValueEvent(new ValueEventListener() {
@@ -392,20 +401,20 @@ public class DataManager {
                     public void onDataChange(DataSnapshot dataSnapshot) {
 
                         try {
-                            JSONObject json  = new JSONObject((String) dataSnapshot.getValue());
+                            JSONObject json = new JSONObject((String) dataSnapshot.getValue());
                             String theJSONText = json.toString();
-                            Paper.book(PaperTags.BOOK).write(PaperTags.JSON_DATA,theJSONText);//save data to storage
+                            Paper.book(PaperTags.BOOK).write(PaperTags.JSON_DATA, theJSONText);//save data to storage
 
                         } catch (JSONException e) {
                             e.printStackTrace();
                             EventBus.getDefault().post(new NotificationContent(NotificationKey.questionBankError, null, null));
                         }
-                        EventBus.getDefault().post(new NotificationContent(NotificationKey.updatedQuestionBank,null, null));
+                        EventBus.getDefault().post(new NotificationContent(NotificationKey.updatedQuestionBank, null, null));
                     }
 
                     @Override
                     public void onCancelled(FirebaseError firebaseError) {
-                        EventBus.getDefault().post(new NotificationContent(NotificationKey.questionBankError,firebaseError, null));
+                        EventBus.getDefault().post(new NotificationContent(NotificationKey.questionBankError, firebaseError, null));
                     }
                 });
 
@@ -414,7 +423,7 @@ public class DataManager {
 
             @Override
             public void onCancelled(FirebaseError firebaseError) {
-                EventBus.getDefault().post(new NotificationContent(NotificationKey.questionBankError,firebaseError, null));
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.questionBankError, firebaseError, null));
             }
         });
 
@@ -422,23 +431,627 @@ public class DataManager {
     }
 
 
-    /*
     public void downloadingNewVersion() {
 
     }
 
     public void loadInitialArray() {
 
-        ArrayList<?> temp = new ArrayList<>();
-
-        for q in jsonManager.allQuestions {
-
-            if (!isQuestionLocked(q as! NSDictionary)) {
-                temp.addObject(q);
+        ArrayList<LinkedHashMap<String,?>> temp = new ArrayList<>();
+        for (Object q:jsonManager.allQuestions) {
+            if(q instanceof LinkedHashMap){
+                temp.add((LinkedHashMap<String, ?>) q);
+            }else{
+                System.out.println("loadInitialArray: CHECK ERROR HERE");
             }
+        }
+        initialQuestions = temp;
+    }
 
+    public boolean isQuestionLocked(LinkedHashMap<String,?> question){
+
+        if (unlocked) {
+            return false;
+        }
+        if (initialCategories.contains(String.valueOf(question.get("fromCategory"))) &&
+                Integer.valueOf(question.get("position").toString()) <= 5){
+            return false;
         }
 
-        initialQuestions = temp;
-    }*/
+        return true;
+
+    }
+
+    public void upgradePurchased() {
+        currentUserReference.child("subscription").setValue(dateFormatter.format(new Date()));
+        unlocked = true;
+    }
+
+    public void resetData() {
+
+        currentUserReference.child("answered").removeValue();
+        currentUserReference.child("favourited").removeValue();
+        currentUserReference.child("ratedDontKnow").removeValue();
+        currentUserReference.child("ratedSomewhat").removeValue();
+        currentUserReference.child("ratedKnow").removeValue();
+        currentUserReference.child("highscore").removeValue();
+        allFavourites = new ArrayList<>();
+        allDontKnow = new ArrayList<>();
+        allAnswers = new ArrayList<>();
+        allKnow = new ArrayList<>();
+        allSomeWhat = new ArrayList<>();
+        highScore = 0;
+
+        EventBus.getDefault().post(new NotificationContent(NotificationKey.dataReset, null,null));
+    }
+
+    public void rateCurrentQuestionAs(int rating) {
+
+        LinkedHashMap question = jsonManager.currentQuestion;
+
+        //remove string from any previous rating (if applicable)
+
+        String previousRatingRef = "";
+
+        if (allSomeWhat.contains(question) ) {
+
+            previousRatingRef = "ratedSomewhat";
+
+        } else if (allKnow.contains(question)) {
+
+            previousRatingRef = "ratedKnow";
+
+        } else if (allDontKnow.contains(question)) {
+
+            previousRatingRef = "ratedDontKnow";
+        }
+
+        String ratingRef = "";
+
+        if (rating == 1) {//dont know
+
+            ratingRef = "ratedDontKnow";
+        }
+        else if (rating == 2) {//somewhat
+            ratingRef = "ratedSomewhat";
+
+        }
+        else if (rating == 3) {//know
+            ratingRef = "ratedKnow";
+        }
+
+        if (previousRatingRef.length() > 0) {
+            removeRating(String.valueOf(question.get("id")), previousRatingRef, ratingRef);
+        } else {
+            addRating(ratingRef,String.valueOf(question.get("id")));
+        }
+
+    }
+
+    public void removeRating(final String questionId, final String previousRef, final String newRef) {
+        currentUserReference.child(previousRef).addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                //check it may return hashmap i am not sure yet bestieee:p
+                ArrayList array = (ArrayList) dataSnapshot.getValue();
+                array.remove(questionId);
+                currentUserReference.child(previousRef).setValue(array, new Firebase.CompletionListener() {
+                    @Override
+                    public void onComplete(FirebaseError firebaseError, Firebase firebase) {
+                        if(firebaseError != null){
+                            //print("Error: \(error!) \(error!.userInfo)")
+                        }else{
+                            addRating(newRef, questionId);
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+    }
+
+    public void addRating(final String ratingRef, final String questionId) {
+        currentUserReference.child(ratingRef).addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                ArrayList<String> array = new ArrayList<String>();
+
+                if (dataSnapshot.exists()) {
+                    array = (ArrayList<String>) dataSnapshot.getValue(); // i am sure this will fire class cast
+                    array.add(questionId);
+
+                } else {
+
+                    array = new ArrayList<String>(Arrays.asList(questionId));
+                }
+                currentUserReference.child(ratingRef).setValue(new Firebase.CompletionListener() {
+                    @Override
+                    public void onComplete(FirebaseError firebaseError, Firebase firebase) {
+                        if(firebaseError != null){
+
+                        }else{
+                            loadRated();
+                        }
+                    }
+                });
+            }
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+    }
+
+    public int getCurrentQuestionRating() {
+        LinkedHashMap question = jsonManager.currentQuestion;
+
+        //remove string from any previous rating (if applicable)
+        if (allSomeWhat.contains(question) ) {
+
+            return 2;
+
+        } else if (allKnow.contains(question)) {
+
+            return 3;
+
+        } else if (allDontKnow.contains(question)) {
+
+            return 1;
+        }
+        return 0;
+    }
+
+    public void dentalProtectionCheck( String memberID){//,var initials:String) {
+        final String mem = memberID.toUpperCase().replaceAll(" ","").trim();
+        //initials = initials.uppercaseString.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
+        firebaseReference.child("dentalProtection/"+mem+"/redeemedBy").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(dataSnapshot.exists() && String.valueOf(dataSnapshot.getValue()).length() == 0){
+                    firebaseReference.child("dentalProtection/" + mem + "/redeemedBy").setValue(firebaseReference.getAuth().getUid());
+                    EventBus.getDefault().post(new NotificationContent(NotificationKey.validDentalProtection, null, null));
+                    upgradePurchased();
+
+                } else {
+                    EventBus.getDefault().post(new NotificationContent(NotificationKey.invalidDentalProtection,null,null));
+                }
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.invalidDentalProtection,null,null));
+            }
+        });
+
+    }
+
+    //~~~~~
+
+    public void checkLockStatus() {
+        /*
+        unlocked = true
+        return;
+            //comment out above for production
+          */
+
+
+        //dateFormatter.dateFormat = "dd/MM/yyyy";
+        currentUserReference.child("subscription").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(dataSnapshot.exists()) {
+
+                    String dateString  = String.valueOf(dataSnapshot.getValue());
+                    Date date = null;
+                    try {
+                        date = dateFormatter.parse(dateString);
+                    } catch (ParseException e) {
+                        e.printStackTrace();
+                    }
+                    if (daysFrom(date) > 365) {
+                        subscriptionString = "Your subscription has expired";
+                        unlocked = false;
+                        //print("Questions Locked - expired")
+                    } else {
+
+
+                        subscriptionString = "You subscribed on "+dateString;
+                        unlocked = true;
+                        //print("All questions unlocked")
+                    }
+
+
+
+                } else {
+                    unlocked = false;
+                    subscriptionString = "No subscription";
+                    //print("Questions Locked")
+
+                }
+
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+        
+         
+
+    }
+
+
+    public long daysFrom(Date date){
+        long diff = Calendar.getInstance().getTimeInMillis() - date.getTime();
+        return TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS);
+    }
+
+    // MARK: Retrieving Data
+
+    public void loadHighScore() {
+        currentUserReference.child("highscore").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(dataSnapshot.exists()){
+                    highScore = Integer.valueOf(String.valueOf(dataSnapshot.getValue()));
+                }else{
+                    highScore = 0;
+                }
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+    }
+
+
+    public void loadFavourites() {
+        currentUserReference.child("favourited").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if (dataSnapshot.exists()) {
+
+                    allFavourites = getQuestionsWithIDs((ArrayList) dataSnapshot.getValue());
+
+                    //print("Successfully loaded \(self.allFavourites.count) favourites")
+
+
+                } else {
+                    allFavourites = new ArrayList<Object>();
+
+                    //print("No Favourites")
+
+                }
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.recievedFavourites,allFavourites,null));
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+
+    }
+
+    public void loadRated() {
+        currentUserReference.child("ratedDontKnow").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(dataSnapshot.exists()){
+
+                    allDontKnow = getQuestionsWithIDs((ArrayList) dataSnapshot.getValue());
+
+                    //print("\(self.allDontKnow.count) questions rated as 'Don't Know'")
+
+                } else {
+                    allDontKnow = new ArrayList<Object>();
+
+                    //print("Nothing rated as 'Don't Know'")
+
+                }
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.refresh,null,null));
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+
+        currentUserReference.child("ratedSomewhat").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(dataSnapshot.exists()){
+
+                    allSomeWhat = getQuestionsWithIDs((ArrayList) dataSnapshot.getValue());
+
+                    //print("\(self.allDontKnow.count) questions rated as 'Don't Know'")
+
+                } else {
+                    allSomeWhat = new ArrayList<Object>();
+
+                    //print("Nothing rated as 'Don't Know'")
+
+                }
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.refresh,null,null));
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+
+        currentUserReference.child("ratedKnow").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(dataSnapshot.exists()){
+
+                    allKnow = getQuestionsWithIDs((ArrayList) dataSnapshot.getValue());
+
+                    //print("\(self.allDontKnow.count) questions rated as 'Don't Know'")
+
+                } else {
+                    allKnow = new ArrayList<Object>();
+
+                    //print("Nothing rated as 'Don't Know'")
+
+                }
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.refresh,null,null));
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+
+
+    }
+
+    public void loadAnswered() {
+
+        currentUserReference.child("answered").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(dataSnapshot.exists()){
+
+                    allAnswers = getQuestionsWithIDs((ArrayList) dataSnapshot.getValue());
+
+                    //print("\(self.allDontKnow.count) questions rated as 'Don't Know'")
+
+                } else {
+                    allAnswers = new ArrayList<Object>();
+
+                    //print("Nothing rated as 'Don't Know'")
+
+                }
+                EventBus.getDefault().post(new NotificationContent(NotificationKey.recievedAnswers,null,null));
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+
+    }
+
+    public ArrayList<LinkedHashMap> getQuestionsWithIDs(ArrayList ids){
+        ArrayList<LinkedHashMap> array = new ArrayList<>();
+
+        for (Object q : jsonManager.allQuestions){
+            if(q instanceof LinkedHashMap) {
+                if (ids.contains(((LinkedHashMap)q).get("id"))){
+                    array.add((LinkedHashMap) q);
+                }
+            }
+        }
+
+        return array;
+
+    }
+
+    public ArrayList loadAnsweredFromCategory(String category){
+
+        ArrayList array = new ArrayList();
+        for (Object q:allAnswers){
+            if(q instanceof ArrayList){
+                if(((ArrayList)q).contains(category)){
+                    array.add(q);
+                }
+            }else if(q instanceof LinkedHashMap){
+                if(((LinkedHashMap) q).containsKey(category)){
+                    array.add(q);
+                }
+            }
+        }
+        return array;
+    }
+
+    public ArrayList loadQuestionsFromCategory(String category){
+
+        ArrayList array = new ArrayList();
+        for (Object q:jsonManager.allQuestions){
+            if(q instanceof ArrayList){
+                if(((ArrayList)q).contains(category)){
+                    array.add(q);
+                }
+            }else if(q instanceof LinkedHashMap){
+                if(((LinkedHashMap) q).containsKey(category)){
+                    array.add(q);
+                }
+            }
+        }
+        return array;
+    }
+
+
+    public ArrayList loadFavouritesFromCategory(String category){
+
+        ArrayList array = new ArrayList();
+        for (Object q:allFavourites){
+            if(q instanceof ArrayList){
+                if(((ArrayList)q).contains(category)){
+                    array.add(q);
+                }
+            }else if(q instanceof LinkedHashMap){
+                if(((LinkedHashMap) q).containsKey(category)){
+                    array.add(q);
+                }
+            }
+        }
+        return array;
+    }
+
+    public boolean checkIfAnsweredBefore(Object question){
+        for(Object a : allAnswers){
+            if (((LinkedHashMap)a).get("id").equals(((LinkedHashMap)a).get("id"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean isHighScore(int score){
+        if (score > highScore) {
+
+            highScore = score;
+
+            currentUserReference.child("highscore").setValue(highScore);
+
+            return true;
+        }
+        return false;
+
+    }
+
+    public void newAnswer(final LinkedHashMap answer) {
+
+        ArrayList array1 = loadAnsweredFromCategory(String.valueOf(answer.get("fromCategory")));
+        ArrayList array2 = loadQuestionsFromCategory(String.valueOf(answer.get("fromCategory")));
+
+        if (array1.size()+1 == array2.size()) {
+            EventBus.getDefault().post(new NotificationContent(NotificationKey.categoryComplete,null,null));
+        }
+        currentUserReference.child("answered").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(!dataSnapshot.exists()) {
+
+                    ArrayList<String> array = (ArrayList<String>) answer.get("id");
+                    currentUserReference.child("answered").setValue(array, new Firebase.CompletionListener() {
+                        @Override
+                        public void onComplete(FirebaseError firebaseError, Firebase firebase) {
+                            if (firebaseError != null) {
+                                //print("Error: \(error!) \(error!.userInfo)")
+                            } else {
+                                //print("Answer successfully saved");
+                                loadAnswered();
+                            }
+                        }
+                    });
+
+                } else {
+
+                    ArrayList<String> array  = (ArrayList<String>) dataSnapshot.getValue();
+
+                    array.addAll((Collection<? extends String>) answer.get("id"));
+
+                    currentUserReference.child("answered").setValue(array, new Firebase.CompletionListener() {
+                        @Override
+                        public void onComplete(FirebaseError firebaseError, Firebase firebase) {
+                            if (firebaseError != null) {
+                                //print("Error: \(error!) \(error!.userInfo)")
+                            } else {
+                                //print("Answer successfully saved");
+                                loadAnswered();
+                            }
+                        }
+                    });
+
+                }
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+
+
+    }
+
+    public boolean checkIfFavourited(Object question ){
+
+
+        for(Object a :allFavourites) {
+            if(((LinkedHashMap)a).get("id").equals(((LinkedHashMap)question).get("id"))){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void favourite(final LinkedHashMap question) {
+
+        currentUserReference.child("favourited").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(!dataSnapshot.exists()) {
+                    ArrayList<String> array = (ArrayList<String>) question.get("id");
+                    currentUserReference.child("favourited").setValue(array, new Firebase.CompletionListener() {
+                        @Override
+                        public void onComplete(FirebaseError firebaseError, Firebase firebase) {
+                            if (firebaseError != null) {
+                                //print("Error: \(error!) \(error!.userInfo)")
+                            } else {
+                                //print("Favourite successfully saved");
+                                loadFavourites();
+                            }
+                        }
+                    });
+
+
+                }else{
+                    ArrayList array = (ArrayList) dataSnapshot.getValue();
+
+                    if(checkIfFavourited(question)){
+
+                        array.remove(question.get("id"));
+
+
+                    }else{
+                        array.add(question.get("id"));;
+                    }
+
+                    currentUserReference.child("favourited").setValue(array, new Firebase.CompletionListener() {
+                        @Override
+                        public void onComplete(FirebaseError firebaseError, Firebase firebase) {
+                            if (firebaseError != null) {
+                                //print("Error: \(error!) \(error!.userInfo)")
+                            } else {
+                                //print("Favourite successfully saved");
+                                loadFavourites();
+                            }
+                        }
+                    });
+
+                }
+            }
+
+            @Override
+            public void onCancelled(FirebaseError firebaseError) {
+
+            }
+        });
+    }
 }
