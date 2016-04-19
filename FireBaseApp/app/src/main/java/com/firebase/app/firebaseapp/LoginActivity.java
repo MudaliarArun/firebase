@@ -86,7 +86,7 @@ public class LoginActivity extends AppCompatActivity  {
         Paper.init(this);
         //myFirebaseRef = new Firebase("https://<YOUR-FIREBASE-APP>.firebaseio.com/");
         myFirebaseRef = new Firebase("https://demoonlivedata.firebaseio.com/");//.firebaseIO.com
-        myFirebaseRef = new Firebase("https://dentaliq.firebaseio.com");//.firebaseIO.com
+        //myFirebaseRef = new Firebase("https://dentaliq.firebaseio.com");//.firebaseIO.com
         //Firebase ends
 
 
